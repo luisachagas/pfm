@@ -1,0 +1,30 @@
+# Secrets
+.env
+*.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Outputs gerados
+4. Petições/
+dados_retorno.xlsx
+*.pdf
+*.txt
+
+# (opcional) ignore caches
+*.log
+.DS_Store
+.env
+2. Data/df_conjunta.csv
+2. Data/estoque.csv
+
+# DATA (não versionar)
+2. Data/*.csv
+2. Data/*.parquet
+2. Data/*.xlsx
+!2. Data/user.csv
+!2. Data/.gitkeep
