@@ -1,0 +1,7 @@
+streamlit
+pandas
+boto3
+python-dotenv
+awswrangler
+reportlab
+openpyxl
