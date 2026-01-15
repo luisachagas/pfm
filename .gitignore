@@ -28,3 +28,4 @@ dados_retorno.xlsx
 2. Data/*.xlsx
 !2. Data/user.csv
 !2. Data/.gitkeep
+*.xlsx
