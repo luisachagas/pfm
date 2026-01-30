@@ -8,4 +8,4 @@ s3fs
 fsspec
 reportlab
 openpyxl
-xlrd
+watchdog
