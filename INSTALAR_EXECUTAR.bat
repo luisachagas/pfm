@@ -2,6 +2,9 @@
 chcp 65001 >nul 2>&1
 title Sistema de Peticoes PCR - Instalador
 
+REM Ir para a pasta onde este arquivo .bat esta (obrigatorio para achar app.py)
+cd /d "%~dp0"
+
 echo.
 echo ====================================================
 echo    SISTEMA DE PETICOES AUTOMATICAS - PCR
@@ -76,6 +79,6 @@ echo       Para fechar: Pressione CTRL+C
 echo ====================================================
 echo.
 
-streamlit run main.py --theme.base=light
+streamlit run app.py --theme.base=light
 
 pause

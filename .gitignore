@@ -13,7 +13,9 @@ venv/
 4. Petições/
 dados_retorno.xlsx
 *.pdf
+# Não subir .txt gerados (mas manter requirements)
 *.txt
+!requirements.txt
 
 # (opcional) ignore caches
 *.log

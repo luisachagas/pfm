@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import boto3
+import tempfile
 from dotenv import load_dotenv
 import awswrangler as wr
 import locale
@@ -15,14 +16,30 @@ import io
 
 # Configurações iniciais
 st.set_page_config(
-    page_title="Sistema de Petições Automáticas",
+    page_title="Sistema PCR — Hub de Robôs",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Carrega as variáveis de ambiente
+# Carrega as variáveis de ambiente (local; na nuvem usa Secrets)
 load_dotenv()
+
+# Diretório de saída: local usa "4. Petições"; na nuvem usa /tmp (disco é somente leitura)
+def _get_output_dir():
+    default = "4. Petições"
+    try:
+        os.makedirs(default, exist_ok=True)
+        if os.access(default, os.W_OK):
+            return default
+    except Exception:
+        pass
+    tmp = os.path.join(tempfile.gettempdir(), "peticoes_pcr")
+    os.makedirs(tmp, exist_ok=True)
+    return tmp
+
+OUTPUT_DIR = _get_output_dir()
+RUNNING_IN_CLOUD = OUTPUT_DIR != "4. Petições"
 
 # Configura o locale para português
 try:
@@ -33,49 +50,188 @@ except:
     except:
         pass
 
-# Estilos CSS customizados
+# Cores Procuradoria: azul escuro + branco
+AZUL_ESCURO = "#0d47a1"
+AZUL_MEIO = "#1565c0"
+AZUL_CLARO = "#e3f2fd"
+BRANCO = "#ffffff"
+CINZA_PAGE = "#f5f7fa"
+
+# Estilos CSS - Hub + Dashboard (azul escuro e branco)
 st.markdown("""
     <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #2B2E3D;
-        text-align: center;
-        padding: 1rem;
-        margin-bottom: 2rem;
+    :root {
+        --azul: #0d47a1;
+        --azul-meio: #1565c0;
+        --azul-claro: #e3f2fd;
+        --branco: #ffffff;
+        --cinza: #64748b;
+        --dark: #1e3a5f;
     }
-    .module-card {
-        background-color: #f0f2f6;
-        border-radius: 10px;
+    
+    .stApp { background: #f5f7fa; }
+    
+    /* ========== HUB DE ROBÔS ========== */
+    .hub-container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+    .hub-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    .hub-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #0d47a1;
+        margin-bottom: 0.5rem;
+    }
+    .hub-header p { color: #64748b; font-size: 1.1rem; }
+    
+    .hub-card {
+        background: #ffffff;
+        border-radius: 16px;
         padding: 2rem;
         margin: 1rem 0;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 20px rgba(13, 71, 161, 0.1);
+        border: 1px solid rgba(13, 71, 161, 0.15);
+        transition: transform 0.2s, box-shadow 0.2s;
     }
+    .hub-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(13, 71, 161, 0.2);
+    }
+    .hub-card.disabled { opacity: 0.6; pointer-events: none; }
+    .hub-card .tag {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #0d47a1;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    .hub-card h2 { color: #1e3a5f; font-size: 1.35rem; margin-bottom: 0.5rem; }
+    .hub-card p { color: #64748b; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.25rem; }
+    
+    /* ========== TOP BAR (Dashboard) ========== */
+    .top-bar {
+        background: #0d47a1;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0 0 12px 12px;
+        margin: -1rem -1rem 1.5rem -1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .top-bar .logo-area { display: flex; align-items: center; gap: 0.75rem; color: white; font-weight: 700; font-size: 1.1rem; }
+    .top-bar .user-area { color: rgba(255,255,255,0.95); font-size: 0.95rem; }
+    
+    /* ========== BANNER BOAS-VINDAS ========== */
+    .dashboard-banner {
+        background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+        border-radius: 16px;
+        padding: 2rem 2.5rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 4px 20px rgba(13, 71, 161, 0.25);
+    }
+    .dashboard-banner h2 { color: white; font-size: 1.75rem; margin-bottom: 0.35rem; }
+    .dashboard-banner p { color: rgba(255,255,255,0.9); font-size: 1rem; margin-bottom: 1.25rem; }
+    
+    /* ========== CARDS MÓDULOS (estilo Running Courses) ========== */
+    .running-card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        border: 1px solid #e2e8f0;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .running-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(13, 71, 161, 0.12);
+    }
+    .running-card .tag {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #0d47a1;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }
+    .running-card h3 { color: #1e3a5f; font-size: 1.15rem; margin-bottom: 0.5rem; }
+    .running-card .desc { color: #64748b; font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem; }
+    
+    /* ========== SIDEBAR MENU (dashboard) ========== */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e3a5f 0%, #0d47a1 100%);
+    }
+    [data-testid="stSidebar"] .stRadio label, [data-testid="stSidebar"] .stRadio label div { color: #f1f5f9 !important; }
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] .stCaption { color: #94a3b8 !important; }
+    
+    /* ========== TAGS (Você pode precisar) ========== */
+    .tag-pill {
+        display: inline-block;
+        background: rgba(255,255,255,0.15);
+        color: #e2e8f0;
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        margin: 0.25rem;
+    }
+    
+    /* ========== OUTROS ========== */
+    .main-header { font-size: 1.5rem; color: #0d47a1; font-weight: 700; margin-bottom: 1rem; }
     .success-box {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 5px;
-        padding: 1rem;
-        margin: 1rem 0;
+        background: #e8f5e9; border: 1px solid #4caf50; border-radius: 12px;
+        padding: 1.25rem 1.5rem; margin: 1rem 0;
     }
+    .success-box h3 { color: #2e7d32; }
+    .success-box p { color: #1b5e20; }
     .info-box {
-        background-color: #d1ecf1;
-        border: 1px solid #bee5eb;
-        border-radius: 5px;
-        padding: 1rem;
-        margin: 1rem 0;
+        background: #e3f2fd; border: 1px solid #0d47a1; border-radius: 12px;
+        padding: 1.25rem 1.5rem; margin: 1rem 0;
     }
+    .info-box h3 { color: #0d47a1; }
+    .info-box ol, .info-box p { color: #1e3a5f; line-height: 1.7; }
+    .step-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 32px; height: 32px; background: #0d47a1; color: white;
+        border-radius: 50%; font-weight: 700; font-size: 0.95rem; margin-right: 0.5rem;
+    }
+    .info-box code, .success-box code { background: rgba(0,0,0,0.06); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
     </style>
 """, unsafe_allow_html=True)
+
+def _get_aws_credentials():
+    """Credenciais AWS: na nuvem usa st.secrets, local usa .env (os.getenv)"""
+    key = secret = None
+    try:
+        if hasattr(st, "secrets") and st.secrets:
+            key = st.secrets.get("aws_access_key_id")
+            secret = st.secrets.get("aws_secret_access_key")
+    except Exception:
+        pass
+    if not key:
+        key = os.getenv("aws_access_key_id")
+    if not secret:
+        secret = os.getenv("aws_secret_access_key")
+    return key, secret
 
 # Funções auxiliares
 @st.cache_resource
 def init_aws_connection():
     """Inicializa conexão com AWS S3"""
     try:
-        boto3.setup_default_session(
-            aws_access_key_id=os.getenv("aws_access_key_id"),
-            aws_secret_access_key=os.getenv("aws_secret_access_key")
-        )
+        key, secret = _get_aws_credentials()
+        if not key or not secret:
+            st.error("Credenciais AWS não configuradas. Na nuvem: configure em Secrets. Local: use arquivo .env")
+            return False
+        boto3.setup_default_session(aws_access_key_id=key, aws_secret_access_key=secret)
         return True
     except Exception as e:
         st.error(f"Erro ao conectar com AWS: {e}")
@@ -366,8 +522,8 @@ def criar_extrato_pdf(row, da_merge_row, output_filename):
 def processar_modulo_novas_cdas(df_input, da_merge, usuario_selecionado, df_user):
     """Processa módulo de novas CDAs"""
     try:
-        # Criar diretório de saída
-        os.makedirs('4. Petições', exist_ok=True)
+        # Criar diretório de saída (OUTPUT_DIR já definido no início do app)
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         
         # Buscar dados do usuário
         usuario_info = df_user[df_user['user'] == usuario_selecionado]
@@ -408,11 +564,11 @@ def processar_modulo_novas_cdas(df_input, da_merge, usuario_selecionado, df_user
                 )
                 
                 # Salvar petição
-                with open(f'4. Petições/{numero}_peticao.txt', 'w', encoding='utf-8') as f:
+                with open(os.path.join(OUTPUT_DIR, f'{numero}_peticao.txt'), 'w', encoding='utf-8') as f:
                     f.write(texto_peticao)
                 
                 # Criar extrato PDF
-                criar_extrato_pdf(row, da_merge_row, f'4. Petições/{numero}_extrato.pdf')
+                criar_extrato_pdf(row, da_merge_row, os.path.join(OUTPUT_DIR, f'{numero}_extrato.pdf'))
                 
                 peticoes_geradas.append(numero)
                 progress_bar.progress((idx + 1) / total)
@@ -440,7 +596,7 @@ def processar_modulo_novas_cdas(df_input, da_merge, usuario_selecionado, df_user
         df_merged.dropna(subset=['cda', 'tipo_divida'], inplace=True)
         
         # Salvar Excel
-        df_merged.to_excel('dados_retorno.xlsx', index=False)
+        df_merged.to_excel(os.path.join(OUTPUT_DIR, 'dados_retorno.xlsx'), index=False)
         
         return peticoes_geradas, erros, df_merged
         
@@ -452,7 +608,7 @@ def processar_modulo_cdas_ajuizadas(df_input, da_merge, usuario_selecionado, df_
     """Processa módulo de CDAs já ajuizadas"""
     try:
         # Criar diretório de saída
-        os.makedirs('4. Petições', exist_ok=True)
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         
         # Buscar dados do usuário
         usuario_info = df_user[df_user['user'] == usuario_selecionado]
@@ -498,11 +654,11 @@ def processar_modulo_cdas_ajuizadas(df_input, da_merge, usuario_selecionado, df_
                 )
                 
                 # Salvar petição
-                with open(f'4. Petições/{exec_num}_peticao.txt', 'w', encoding='utf-8') as f:
+                with open(os.path.join(OUTPUT_DIR, f'{exec_num}_peticao.txt'), 'w', encoding='utf-8') as f:
                     f.write(texto_peticao)
                 
                 # Criar extrato PDF
-                criar_extrato_pdf(row, da_merge_row, f'4. Petições/{exec_num}_extrato.pdf')
+                criar_extrato_pdf(row, da_merge_row, os.path.join(OUTPUT_DIR, f'{exec_num}_extrato.pdf'))
                 
                 peticoes_geradas.append(exec_num)
                 progress_bar.progress((idx + 1) / total)
@@ -529,7 +685,7 @@ def processar_modulo_cdas_ajuizadas(df_input, da_merge, usuario_selecionado, df_
         df_merged['id_entidade'] = df_merged['id_entidade'].astype(str).str.replace('.0', '')
         
         # Salvar Excel
-        df_merged.to_excel('dados_retorno.xlsx', index=False)
+        df_merged.to_excel(os.path.join(OUTPUT_DIR, 'dados_retorno.xlsx'), index=False)
         
         return peticoes_geradas, erros, df_merged
         
@@ -537,105 +693,192 @@ def processar_modulo_cdas_ajuizadas(df_input, da_merge, usuario_selecionado, df_
         st.error(f"Erro no processamento: {e}")
         return [], [str(e)], None
 
+# Caminho do Excel de retorno (para download)
+def _excel_retorno_path():
+    return os.path.join(OUTPUT_DIR, 'dados_retorno.xlsx')
+
 # Interface principal
 def main():
-    st.markdown('<h1 class="main-header">⚖️ Sistema de Petições Automáticas - PCR</h1>', unsafe_allow_html=True)
+    # Estado: hub (seleção de robôs) ou extrato (petições)
+    if 'tela_atual' not in st.session_state:
+        st.session_state.tela_atual = "hub"
+    if 'modulo' not in st.session_state:
+        st.session_state.modulo = "🏠 Início"
     
-    # Sidebar
-    with st.sidebar:
-        st.image("https://via.placeholder.com/200x80/2B2E3D/FFFFFF?text=PCR", use_container_width=True)
-        st.title("Menu de Navegação")
+    # ---------- HUB DE ROBÔS (tela inicial) ----------
+    if st.session_state.tela_atual == "hub":
+        with st.sidebar:
+            cabecalho_path = os.path.join("1. UI", "cabecalho.png")
+            if os.path.exists(cabecalho_path):
+                st.image(cabecalho_path, use_container_width=True)
+            else:
+                st.markdown("""
+                <div style="background: #0d47a1; padding: 1rem; border-radius: 12px; text-align: center; color: white; font-weight: 700; font-size: 1.1rem;">PCR</div>
+                """, unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("### Hub de Robôs")
+            st.caption("Selecione o robô abaixo para acessar.")
+            st.markdown("---")
+            st.caption("Sistema PCR · Versão 2.0  \n© 2024 Procuradoria do Recife")
         
-        # Inicializar modulo no session_state se não existir
-        if 'modulo' not in st.session_state:
-            st.session_state.modulo = "🏠 Início"
-        
-        modulo = st.radio(
-            "Selecione o módulo:",
-            ["🏠 Início", "📝 Novas CDAs", "⚖️ CDAs Ajuizadas"],
-            index=["🏠 Início", "📝 Novas CDAs", "⚖️ CDAs Ajuizadas"].index(st.session_state.modulo),
-            key='menu_radio'
-        )
-        
-        # Atualizar session_state
-        st.session_state.modulo = modulo
-        
-        st.divider()
-        
-        # Informações do sistema
-        st.caption("**Sistema de Petições Automáticas**")
-        st.caption("Versão 2.0")
-        st.caption("© 2024 Procuradoria do Recife")
-    
-    # Tela Inicial
-    if modulo == "🏠 Início":
         st.markdown("""
-        <div style="text-align: center; padding: 2rem 0;">
-            <h2>Bem-vindo ao Sistema de Petições Automáticas</h2>
-            <p style="font-size: 1.2rem; color: #666;">Selecione o módulo que deseja utilizar:</p>
+        <div class="hub-container">
+            <div class="hub-header">
+                <h1>Hub de Robôs — Procuradoria do Recife</h1>
+                <p>Selecione o robô que deseja utilizar. Novos robôs serão disponibilizados em breve.</p>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Criar duas colunas para os botões
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            <div class="hub-card">
+                <span class="tag">Petições / Extrato</span>
+                <h2>Petições Automáticas — Extrato CDA</h2>
+                <p>Gera petições e extratos em conformidade com a Resolução CNJ 547/2024. Módulos: Novas CDAs e CDAs Ajuizadas.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Acessar Extrato", type="primary", use_container_width=True, key="hub_extrato"):
+                st.session_state.tela_atual = "extrato"
+                st.session_state.modulo = "🏠 Início"
+                st.rerun()
+        
+        with col2:
+            st.markdown("""
+            <div class="hub-card disabled">
+                <span class="tag">Em breve</span>
+                <h2>Novos robôs</h2>
+                <p>Outros robôs serão integrados ao hub em atualizações futuras.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            st.button("Em breve", use_container_width=True, key="hub_breve", disabled=True)
+        
+        return
+    
+    # ---------- DENTRO DO EXTRATO (layout dashboard) ----------
+    # Carregar usuários para exibir no topo (se disponível)
+    df_user = None
+    try:
+        df_user = load_user_data()
+    except Exception:
+        pass
+    
+    # Top bar (barra superior estilo dashboard)
+    user_label = "Usuário"
+    if df_user is not None and not df_user.empty:
+        usuarios = df_user['user'].tolist()
+        default_idx = 0
+        if 'usuario_extrato' in st.session_state and st.session_state.usuario_extrato in usuarios:
+            default_idx = usuarios.index(st.session_state.usuario_extrato)
+        user_label = usuarios[default_idx] if default_idx < len(usuarios) else usuarios[0]
+    
+    cabecalho_path = os.path.join("1. UI", "cabecalho.png")
+    st.markdown(f"""
+    <div class="top-bar">
+        <div class="logo-area">
+            <span style="font-size: 1.25rem;">⚖️</span>
+            <span>Petições Automáticas — Extrato</span>
+        </div>
+        <div class="user-area">Olá, <strong>{user_label}</strong></div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Sidebar do Extrato
+    with st.sidebar:
+        if os.path.exists(cabecalho_path):
+            st.image(cabecalho_path, use_container_width=True)
+        else:
+            st.markdown('<div style="background: #1e3a5f; padding: 0.75rem; border-radius: 8px; color: white; font-weight: 700; text-align: center;">PCR — Extrato</div>', unsafe_allow_html=True)
+        st.markdown("---")
+        
+        if st.button("← Voltar ao Hub", use_container_width=True, key="voltar_hub"):
+            st.session_state.tela_atual = "hub"
+            st.rerun()
+        
+        st.markdown("---")
+        st.markdown("**Extrato — Navegação**")
+        
+        modulo = st.radio(
+            "Menu",
+            ["🏠 Início", "📝 Novas CDAs", "⚖️ CDAs Ajuizadas"],
+            index=["🏠 Início", "📝 Novas CDAs", "⚖️ CDAs Ajuizadas"].index(st.session_state.modulo),
+            key='menu_radio',
+            label_visibility="collapsed"
+        )
+        st.session_state.modulo = modulo
+        
+        st.markdown("---")
+        st.markdown("**Você pode precisar**")
+        st.markdown("""
+        <div style="margin-top: 0.5rem;">
+            <span class="tag-pill">CNJ 547/2024</span>
+            <span class="tag-pill">Parcelamento</span>
+            <span class="tag-pill">Dívida ativa</span>
+            <span class="tag-pill">CDA</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("---")
+        st.caption("Sistema de Petições · © 2024 Procuradoria do Recife")
+    
+    # Conteúdo: Início do Extrato (banner + cards estilo Running Courses)
+    if modulo == "🏠 Início":
+        st.markdown("""
+        <div class="dashboard-banner">
+            <h2>Bem-vindo ao Extrato de Petições</h2>
+            <p>Gere petições e extratos em conformidade com a Resolução CNJ 547/2024. Escolha o módulo abaixo para começar.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("**Módulos disponíveis**")
+        st.markdown("")
         col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("""
-            <div class="module-card">
-                <h2 style="text-align: center;">📝 Novas CDAs</h2>
-                <p style="text-align: center;">Gera petições e extratos para CDAs que ainda não foram ajuizadas.</p>
-                <ul>
-                    <li>Entrada: Arquivo CSV/Excel com coluna 'cda'</li>
-                    <li>Saída: Petições (.txt) e Extratos (.pdf)</li>
-                    <li>Identificação: Número da CDA</li>
-                </ul>
+            <div class="running-card">
+                <span class="tag">Novas CDAs</span>
+                <h3>Petições para CDAs não ajuizadas</h3>
+                <p class="desc">Entrada: CSV/Excel com coluna <code>cda</code>. Saída: petições (.txt) e extratos (.pdf).</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            if st.button("🚀 Acessar Módulo Novas CDAs", use_container_width=True, type="primary", key="btn_novas"):
+            if st.button("Acessar Novas CDAs", type="primary", use_container_width=True, key="btn_novas"):
                 st.session_state.modulo = "📝 Novas CDAs"
                 st.rerun()
         
         with col2:
             st.markdown("""
-            <div class="module-card">
-                <h2 style="text-align: center;">⚖️ CDAs Ajuizadas</h2>
-                <p style="text-align: center;">Gera petições e extratos para CDAs já ajuizadas em execuções fiscais.</p>
-                <ul>
-                    <li>Entrada: CSV/Excel com 'cda', 'nome_executado', 'numero_execucao'</li>
-                    <li>Saída: Petições (.txt) e Extratos (.pdf)</li>
-                    <li>Identificação: Número da execução</li>
-                </ul>
+            <div class="running-card">
+                <span class="tag">CDAs Ajuizadas</span>
+                <h3>Petições para execuções fiscais</h3>
+                <p class="desc">Entrada: <code>cda</code>, <code>nome_executado</code>, <code>numero_execucao</code>. Saída: petições e extratos.</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            if st.button("🚀 Acessar Módulo CDAs Ajuizadas", use_container_width=True, type="primary", key="btn_ajuizadas"):
+            if st.button("Acessar CDAs Ajuizadas", type="primary", use_container_width=True, key="btn_ajuizadas"):
                 st.session_state.modulo = "⚖️ CDAs Ajuizadas"
                 st.rerun()
         
-        st.divider()
-        
+        st.markdown("---")
         st.markdown("""
         <div class="info-box">
-            <h3>📋 Como usar o sistema:</h3>
+            <h3>📋 Como usar</h3>
             <ol>
-                <li>Clique no botão do módulo apropriado acima</li>
-                <li>Escolha o usuário responsável pela petição</li>
-                <li>Faça upload do arquivo com os dados</li>
-                <li>Aguarde o processamento</li>
-                <li>Baixe os arquivos gerados</li>
+                <li>Clique em um dos módulos acima</li>
+                <li>Selecione o usuário responsável e envie o arquivo CSV ou Excel</li>
+                <li>Aguarde o processamento e baixe os arquivos em <code>4. Petições/</code> e o Excel consolidado</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
     
     # Módulo Novas CDAs
     elif modulo == "📝 Novas CDAs":
-        st.header("📝 Geração de Petições para Novas CDAs")
+        st.markdown("### 📝 Geração de Petições para Novas CDAs")
+        st.markdown("")
         
         st.markdown("""
         <div class="info-box">
-        Este módulo processa CDAs que ainda não foram ajuizadas. 
-        O arquivo deve conter pelo menos uma coluna chamada 'cda' com os números das certidões.
+        <strong>ℹ️ Sobre este módulo</strong><br>
+        Processa CDAs que ainda não foram ajuizadas. O arquivo deve conter pelo menos uma coluna chamada <code>cda</code> com os números das certidões.
         </div>
         """, unsafe_allow_html=True)
         
@@ -657,15 +900,18 @@ def main():
             st.error("Não foi possível carregar dados de usuários")
             return
         
-        st.success(f"✅ Dados carregados: {len(da_merge):,} CDAs disponíveis")
+        st.success(f"✅ **{len(da_merge):,}** CDAs disponíveis para consulta")
         
-        # Seleção de usuário
-        st.subheader("1️⃣ Selecione o usuário responsável")
+        st.markdown("---")
+        st.markdown('<span class="step-badge">1</span> **Selecione o usuário responsável**', unsafe_allow_html=True)
+        st.markdown("")
         usuarios = df_user['user'].tolist()
-        usuario_selecionado = st.selectbox("Usuário:", usuarios)
+        usuario_selecionado = st.selectbox("Usuário:", usuarios, key="user_novas", label_visibility="collapsed")
+        st.session_state.usuario_extrato = usuario_selecionado
         
-        # Upload de arquivo
-        st.subheader("2️⃣ Faça upload do arquivo")
+        st.markdown("---")
+        st.markdown('<span class="step-badge">2</span> **Envie o arquivo com as CDAs**', unsafe_allow_html=True)
+        st.markdown("")
         uploaded_file = st.file_uploader(
             "Arquivo CSV ou Excel com coluna 'cda'",
             type=['csv', 'xlsx', 'xls'],
@@ -679,39 +925,43 @@ def main():
                 else:
                     df_input = pd.read_excel(uploaded_file)
                 
-                st.success(f"✅ Arquivo carregado: {len(df_input)} registros")
+                st.success(f"✅ **{len(df_input)}** registros carregados")
                 
-                # Preview dos dados
                 with st.expander("👁️ Visualizar dados"):
                     st.dataframe(df_input.head(10))
                 
-                # Botão processar
-                st.subheader("3️⃣ Processar petições")
+                st.markdown("---")
+                st.markdown('<span class="step-badge">3</span> **Processar petições**', unsafe_allow_html=True)
+                st.markdown("")
                 if st.button("🚀 Gerar Petições e Extratos", type="primary", key='processar_novas'):
                     peticoes, erros, df_merged = processar_modulo_novas_cdas(
                         df_input, da_merge, usuario_selecionado, df_user
                     )
                     
                     if peticoes:
+                        msg_local = "Arquivos salvos em <code>4. Petições/</code>."
+                        msg_cloud = "Baixe o Excel abaixo e os PDFs/TXT pelo botão de download de cada arquivo (em breve)."
                         st.markdown(f"""
                         <div class="success-box">
                             <h3>✅ Processamento concluído!</h3>
-                            <p><strong>{len(peticoes)}</strong> petições geradas com sucesso</p>
+                            <p><strong>{len(peticoes)}</strong> petições e extratos gerados. {msg_cloud if RUNNING_IN_CLOUD else msg_local}</p>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Mostrar lista de CDAs processadas
                         with st.expander("📋 CDAs processadas"):
                             st.write(peticoes)
                         
-                        # Download do Excel
                         if df_merged is not None:
-                            st.download_button(
-                                label="📥 Baixar dados consolidados (Excel)",
-                                data=open('dados_retorno.xlsx', 'rb').read(),
-                                file_name='dados_retorno.xlsx',
-                                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                            )
+                            excel_path = _excel_retorno_path()
+                            if os.path.exists(excel_path):
+                                with open(excel_path, 'rb') as f:
+                                    st.download_button(
+                                        label="📥 Baixar dados consolidados (Excel)",
+                                        data=f.read(),
+                                        file_name='dados_retorno.xlsx',
+                                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                        key='dl_excel_novas'
+                                    )
                     
                     if erros:
                         st.error("⚠️ Erros encontrados:")
@@ -723,21 +973,20 @@ def main():
     
     # Módulo CDAs Ajuizadas
     elif modulo == "⚖️ CDAs Ajuizadas":
-        st.header("⚖️ Geração de Petições para CDAs Ajuizadas")
+        st.markdown("### ⚖️ Geração de Petições para CDAs Ajuizadas")
+        st.markdown("")
         
         st.markdown("""
         <div class="info-box">
-        Este módulo processa CDAs já ajuizadas em execuções fiscais. 
-        O arquivo deve conter as colunas: 'cda', 'nome_executado' e 'numero_execucao'.
+        <strong>ℹ️ Sobre este módulo</strong><br>
+        Processa CDAs já ajuizadas em execuções fiscais. O arquivo deve conter as colunas: <code>cda</code>, <code>nome_executado</code> e <code>numero_execucao</code>.
         </div>
         """, unsafe_allow_html=True)
         
-        # Inicializar conexão
         if not init_aws_connection():
             st.error("Erro ao conectar com AWS. Verifique as credenciais no arquivo .env")
             return
         
-        # Carregar dados
         with st.spinner("Carregando dados do S3..."):
             da_merge = load_data_from_s3()
         
@@ -750,15 +999,18 @@ def main():
             st.error("Não foi possível carregar dados de usuários")
             return
         
-        st.success(f"✅ Dados carregados: {len(da_merge):,} CDAs disponíveis")
+        st.success(f"✅ **{len(da_merge):,}** CDAs disponíveis para consulta")
         
-        # Seleção de usuário
-        st.subheader("1️⃣ Selecione o usuário responsável")
+        st.markdown("---")
+        st.markdown('<span class="step-badge">1</span> **Selecione o usuário responsável**', unsafe_allow_html=True)
+        st.markdown("")
         usuarios = df_user['user'].tolist()
-        usuario_selecionado = st.selectbox("Usuário:", usuarios)
+        usuario_selecionado = st.selectbox("Usuário:", usuarios, key="user_ajuizadas", label_visibility="collapsed")
+        st.session_state.usuario_extrato = usuario_selecionado
         
-        # Upload de arquivo
-        st.subheader("2️⃣ Faça upload do arquivo")
+        st.markdown("---")
+        st.markdown('<span class="step-badge">2</span> **Envie o arquivo com as execuções**', unsafe_allow_html=True)
+        st.markdown("")
         uploaded_file = st.file_uploader(
             "Arquivo CSV ou Excel com colunas: 'cda', 'nome_executado', 'numero_execucao'",
             type=['csv', 'xlsx', 'xls'],
@@ -779,39 +1031,43 @@ def main():
                 if missing_cols:
                     st.error(f"⚠️ Colunas faltando no arquivo: {', '.join(missing_cols)}")
                 else:
-                    st.success(f"✅ Arquivo carregado: {len(df_input)} registros")
+                    st.success(f"✅ **{len(df_input)}** registros carregados")
                     
-                    # Preview dos dados
                     with st.expander("👁️ Visualizar dados"):
                         st.dataframe(df_input.head(10))
                     
-                    # Botão processar
-                    st.subheader("3️⃣ Processar petições")
+                    st.markdown("---")
+                    st.markdown('<span class="step-badge">3</span> **Processar petições**', unsafe_allow_html=True)
+                    st.markdown("")
                     if st.button("🚀 Gerar Petições e Extratos", type="primary", key='processar_ajuizadas'):
                         peticoes, erros, df_merged = processar_modulo_cdas_ajuizadas(
                             df_input, da_merge, usuario_selecionado, df_user
                         )
                         
                         if peticoes:
+                            msg_local = "Arquivos salvos em <code>4. Petições/</code>."
+                            msg_cloud = "Baixe o Excel abaixo."
                             st.markdown(f"""
                             <div class="success-box">
                                 <h3>✅ Processamento concluído!</h3>
-                                <p><strong>{len(peticoes)}</strong> petições geradas com sucesso</p>
+                                <p><strong>{len(peticoes)}</strong> petições e extratos gerados. {msg_cloud if RUNNING_IN_CLOUD else msg_local}</p>
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Mostrar lista de execuções processadas
                             with st.expander("📋 Execuções processadas"):
                                 st.write(peticoes)
                             
-                            # Download do Excel
                             if df_merged is not None:
-                                st.download_button(
-                                    label="📥 Baixar dados consolidados (Excel)",
-                                    data=open('dados_retorno.xlsx', 'rb').read(),
-                                    file_name='dados_retorno.xlsx',
-                                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                                )
+                                excel_path = _excel_retorno_path()
+                                if os.path.exists(excel_path):
+                                    with open(excel_path, 'rb') as f:
+                                        st.download_button(
+                                            label="📥 Baixar dados consolidados (Excel)",
+                                            data=f.read(),
+                                            file_name='dados_retorno.xlsx',
+                                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                            key='dl_excel_ajuizadas'
+                                        )
                         
                         if erros:
                             st.error("⚠️ Erros encontrados:")

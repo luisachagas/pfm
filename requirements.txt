@@ -1,7 +1,8 @@
-streamlit
+streamlit>=1.28.0
 pandas
 boto3
 python-dotenv
 awswrangler
 reportlab
 openpyxl
+xlrd
