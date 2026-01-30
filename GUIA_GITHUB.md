@@ -2,6 +2,8 @@
 
 Você já tem conta no GitHub. Siga um dos casos abaixo.
 
+> **No Windows (PowerShell):** digite **apenas** os comandos abaixo, **um por vez**. Não copie as linhas `` ```bash `` ou `` ``` `` — elas são só formatação do texto.
+
 ---
 
 ## Caso 1: Este projeto já está ligado a um repositório no GitHub
@@ -11,18 +13,18 @@ Se esta pasta já foi clonada do GitHub ou já teve `git remote add` feito antes
 1. **Abra o terminal** na pasta do projeto  
    (no Cursor: Terminal → New Terminal, ou no Windows: abra o Prompt de Comando e use `cd` até a pasta).
 
-2. **Adicione todas as alterações:**
-   ```bash
+2. **Adicione todas as alterações** (copie só esta linha):
+   ```
    git add .
    ```
 
-3. **Crie um commit:**
-   ```bash
+3. **Crie um commit** (copie só esta linha):
+   ```
    git commit -m "Atualização: hub de robôs, layout extrato e deploy na nuvem"
    ```
 
-4. **Envie para o GitHub:**
-   ```bash
+4. **Envie para o GitHub** (copie só esta linha):
+   ```
    git push origin main
    ```
 
@@ -45,27 +47,35 @@ Se pedir usuário e senha: use seu **usuário do GitHub** e, em vez da senha, um
 
 ### Passo B: Subir a pasta do seu PC para esse repositório
 
+**Digite um comando por vez; não copie as linhas em branco nem `` ``` ``.**
+
 1. **Abra o terminal na pasta do projeto** (a pasta onde está o `app.py`).
 
-2. Se ainda **não** tiver Git nesta pasta:
-   ```bash
+2. Se ainda **não** tiver Git nesta pasta, rode (um por vez):
+   ```
    git init
+   ```
+   ```
    git branch -M main
    ```
 
-3. Conecte à sua conta e ao repositório (troque `SEU_USUARIO` e `NOME_DO_REPOSITORIO`):
-   ```bash
+3. Conecte ao repositório (troque SEU_USUARIO e NOME_DO_REPOSITORIO pelos seus):
+   ```
    git remote add origin https://github.com/SEU_USUARIO/NOME_DO_REPOSITORIO.git
    ```
-   Exemplo: se seu usuário é `joao` e o repositório é `sistema-peticoes-pcr`:
-   ```bash
+   Exemplo: usuário `joao`, repositório `sistema-peticoes-pcr`:
+   ```
    git remote add origin https://github.com/joao/sistema-peticoes-pcr.git
    ```
 
-4. Adicione os arquivos, faça o primeiro commit e envie:
-   ```bash
+4. Adicione os arquivos, faça o commit e envie (um comando por vez):
+   ```
    git add .
+   ```
+   ```
    git commit -m "Primeiro envio: Sistema PCR - Hub de Robôs e Extrato"
+   ```
+   ```
    git push -u origin main
    ```
 
@@ -78,10 +88,18 @@ Se pedir usuário e senha: use seu **usuário do GitHub** e, em vez da senha, um
 
 ## Resumo rápido (projeto já com Git e remote)
 
-```bash
+Rode **um comando por vez** no PowerShell (não copie `` ``` `` nem ``bash``):
+
+```
 cd "c:\Users\Lenovo\Downloads\extrato 1 (3)\extrato"
+```
+```
 git add .
+```
+```
 git commit -m "Atualização: hub, layout extrato, deploy nuvem"
+```
+```
 git push origin main
 ```
 
