@@ -14,13 +14,7 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 import io
 
-# Configurações iniciais
-st.set_page_config(
-    page_title="Sistema PCR — Hub de Robôs",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Configurações iniciais - MOVIDO PARA DENTRO DA main()
 
 # Carrega as variáveis de ambiente (local; na nuvem usa Secrets)
 load_dotenv()
@@ -57,8 +51,8 @@ AZUL_CLARO = "#e3f2fd"
 BRANCO = "#ffffff"
 CINZA_PAGE = "#f5f7fa"
 
-# Estilos CSS - Hub + Dashboard (azul escuro e branco)
-st.markdown("""
+# Estilos CSS - MOVIDO PARA DENTRO DA main()
+CSS_STYLES = """
     <style>
     :root {
         --azul: #0d47a1;
@@ -205,7 +199,7 @@ st.markdown("""
     }
     .info-box code, .success-box code { background: rgba(0,0,0,0.06); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
     </style>
-""", unsafe_allow_html=True)
+"""
 
 def _get_aws_credentials():
     """Credenciais AWS: na nuvem usa st.secrets, local usa .env (os.getenv)"""
@@ -700,6 +694,17 @@ def _excel_retorno_path():
 
 # Interface principal
 def main():
+    # DEVE SER A PRIMEIRA CHAMADA STREAMLIT
+    st.set_page_config(
+        page_title="Sistema PCR — Hub de Robôs",
+        page_icon="⚖️",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # Aplicar estilos CSS
+    st.markdown(CSS_STYLES, unsafe_allow_html=True)
+    
     # Estado: hub (seleção de robôs) ou extrato (petições)
     if 'tela_atual' not in st.session_state:
         st.session_state.tela_atual = "hub"
