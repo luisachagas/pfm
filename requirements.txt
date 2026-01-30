@@ -3,6 +3,9 @@ pandas
 boto3
 python-dotenv
 awswrangler
+pyarrow
+s3fs
+fsspec
 reportlab
 openpyxl
 xlrd
