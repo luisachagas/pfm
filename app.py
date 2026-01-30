@@ -254,7 +254,8 @@ def load_user_data():
         df_user = pd.read_csv('2. Data/user.csv', sep=';', decimal=',')
         return df_user
     except Exception as e:
-        st.error(f"Erro ao carregar dados de usuários: {e}")
+        # Não usar st.error aqui pois pode ser chamado antes do Streamlit inicializar
+        print(f"Erro ao carregar dados de usuários: {e}")
         return None
 
 def get_texto_peticao_base():
